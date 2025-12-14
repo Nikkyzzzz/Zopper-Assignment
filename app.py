@@ -330,11 +330,11 @@ def kpi(label, value, delta=None, help_text=None):
         unsafe_allow_html=True
     )
 
-def section_header(title, description=None, icon="📊"):
+def section_header(title, description=None, icon=""):
     html = f"""
     <div class='section-header'>
         <h3 style='color: var(--text); margin-bottom: 0.25rem;'>
-            {icon} {title}
+            {title}
         </h3>
         {f"<p class='small-muted' style='margin-top: 0;'>{description}</p>" if description else ""}
     </div>
@@ -365,7 +365,7 @@ if LOGO_B64:
     st.sidebar.image(f"data:image/svg+xml;base64,{LOGO_B64}", use_container_width=True)
     st.sidebar.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
-st.sidebar.markdown("## 📌 Controls")
+st.sidebar.markdown("## Controls")
 st.sidebar.markdown("<div class='small-muted'>Upload the given sheet or use the bundled sample (converted from .xls).</div>", unsafe_allow_html=True)
 
 default_path = Path(__file__).parent / "data" / "Jumbo_Attach_Sample.xlsx"
@@ -374,32 +374,32 @@ use_sample = st.sidebar.toggle("Use sample file", value=True)
 uploaded = st.sidebar.file_uploader("Upload Excel (.xlsx)", type=["xlsx"]) if not use_sample else None
 
 st.sidebar.markdown("<div class='hr'></div>", unsafe_allow_html=True)
-st.sidebar.markdown("### 📑 Navigation")
+st.sidebar.markdown("### Navigation")
 page = st.sidebar.radio(
     "",
-    ["📊 Executive Summary", 
-     "🏪 Branch & Month Insights", 
-     "🔍 Store Deep Dive", 
-     "🎯 Store Segments", 
-     "🔮 Forecast: January", 
-     "📥 Download Pack"],
+    ["Executive Summary", 
+     "Branch & Month Insights", 
+     "Store Deep Dive", 
+     "Store Segments", 
+     "Forecast: January", 
+     "Download Pack"],
     index=0,
     label_visibility="collapsed"
 )
 
 st.sidebar.markdown("<div class='hr'></div>", unsafe_allow_html=True)
-st.sidebar.markdown("### ⚙️ Data Controls")
+st.sidebar.markdown("### Data Controls")
 st.sidebar.markdown("<div class='small-muted'>Upload your data file or use the provided sample dataset.</div>", unsafe_allow_html=True)
 
 st.sidebar.markdown("<div class='hr'></div>", unsafe_allow_html=True)
-st.sidebar.markdown("### 🎯 What this app produces")
+st.sidebar.markdown("### What this app produces")
 st.sidebar.markdown(
     """
-- **📊 Leaderboard** of top/bottom stores & branches
-- **📈 Month-over-month** movement and volatility
-- **🎯 Smart store** categorization (segments)
-- **🔮 Explainable Jan forecast** per store (with confidence)
-- **📥 One-click downloads** (clean data + forecast)
+- **Leaderboard** of top/bottom stores & branches
+- **Month-over-month** movement and volatility
+- **Smart store** categorization (segments)
+- **Explainable Jan forecast** per store (with confidence)
+- **One-click downloads** (clean data + forecast)
 """,
 )
 
@@ -523,13 +523,13 @@ st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 # =========================
 # Pages
 # =========================
-if page == "📊 Executive Summary":
+if page == "Executive Summary":
     # Add breadcrumb
     st.markdown(
         """
         <div class='breadcrumb'>
             <span class='small-muted'>Navigation:</span> 
-            <strong>📊 Executive Summary</strong>
+            <strong>Executive Summary</strong>
         </div>
         """,
         unsafe_allow_html=True
@@ -539,7 +539,7 @@ if page == "📊 Executive Summary":
 
     with left:
         st.markdown("<div class='panel'>", unsafe_allow_html=True)
-        section_header("What's Happening", "Key insights and branch performance at a glance", "🔍")
+        section_header("What's Happening", "Key insights and branch performance at a glance")
         st.markdown(
             """
             This dashboard is built to help a business reader quickly answer:
@@ -554,14 +554,14 @@ if page == "📊 Executive Summary":
         branch_tbl = long.groupby("Branch")["AttachPct"].mean().reset_index().sort_values("AttachPct", ascending=False)
         branch_tbl["AttachPct"] = branch_tbl["AttachPct"].apply(fmt_pct)
         branch_tbl.columns = ["Branch", "Avg Attach%"]
-        section_header("Branch Leaderboard", "Top performing branches by average attach rate", "🏆")
+        section_header("Branch Leaderboard", "Top performing branches by average attach rate")
         styled_dataframe(branch_tbl, height=250)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
     with right:
         st.markdown("<div class='panel'>", unsafe_allow_html=True)
-        section_header("Quick Wins & Watchouts", "Stores showing significant improvement or decline", "⚡")
+        section_header("Quick Wins & Watchouts", "Stores showing significant improvement or decline")
         
         # Top risers and fallers by slope
         tmp = store_metrics.copy()
@@ -573,16 +573,16 @@ if page == "📊 Executive Summary":
         fallers = tmp.sort_values("slope", ascending=True).head(7)[["Branch","Store","avg_fmt","slope_fmt"]]
         fallers.columns = ["Branch", "Store", "Avg Attach%", "Monthly Trend"]
 
-        section_header("📈 Risers (Improving Stores)", "", "📈")
+        section_header("Risers (Improving Stores)")
         styled_dataframe(risers, height=200)
         
-        section_header("⚠️ Watchouts (Declining Stores)", "", "⚠️")
+        section_header("Watchouts (Declining Stores)")
         styled_dataframe(fallers, height=200)
 
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
-    section_header("Month-over-month Distribution", "Box plot showing attach rate distribution by month", "📊")
+    section_header("Month-over-month Distribution", "Box plot showing attach rate distribution by month")
     if px:
         fig = px.box(long, x="Month", y="AttachPct", points="all")
         fig.update_yaxes(tickformat=".0%")
@@ -598,7 +598,7 @@ if page == "📊 Executive Summary":
         st.info("Plotly not available in this environment. Install plotly for interactive charts.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-elif page == "🏪 Branch & Month Insights":
+elif page == "Branch & Month Insights":
     # Add breadcrumb
     st.markdown(
         """
@@ -606,14 +606,14 @@ elif page == "🏪 Branch & Month Insights":
             <span class='small-muted'>Navigation:</span> 
             <a href='#' onclick='window.location.reload()'>Home</a> 
             <span class='small-muted'>→</span> 
-            <strong>🏪 Branch & Month Insights</strong>
+            <strong>Branch & Month Insights</strong>
         </div>
         """,
         unsafe_allow_html=True
     )
     
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
-    section_header("Branch Performance by Month", "Analyze monthly trends and performance across branches", "📈")
+    section_header("Branch Performance by Month", "Analyze monthly trends and performance across branches")
     
     with st.expander("🔍 Filter Options", expanded=False):
         bcol1, bcol2, bcol3 = st.columns([1,1,1])
@@ -660,7 +660,7 @@ elif page == "🏪 Branch & Month Insights":
     styled_dataframe(show[["Branch", "Avg Attach%", "Volatility", "Health"]], height=300)
     st.markdown("</div>", unsafe_allow_html=True)
 
-elif page == "🔍 Store Deep Dive":
+elif page == "Store Deep Dive":
     # Add breadcrumb
     st.markdown(
         """
@@ -668,16 +668,16 @@ elif page == "🔍 Store Deep Dive":
             <span class='small-muted'>Navigation:</span> 
             <a href='#' onclick='window.location.reload()'>Home</a> 
             <span class='small-muted'>→</span> 
-            <strong>🔍 Store Deep Dive</strong>
+            <strong>Store Deep Dive</strong>
         </div>
         """,
         unsafe_allow_html=True
     )
     
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
-    section_header("Store Explorer", "Drill down into individual store performance", "🔍")
+    section_header("Store Explorer", "Drill down into individual store performance")
     
-    with st.expander("🔍 Filter & View Options", expanded=True):
+    with st.expander("Filter & View Options", expanded=True):
         cA, cB, cC = st.columns([1.1, 1.2, 1.0])
         branches = sorted(long["Branch"].unique().tolist())
         sel_branch = cA.selectbox("Branch", ["All"] + branches, index=0)
@@ -690,7 +690,7 @@ elif page == "🔍 Store Deep Dive":
     sub = long[(long["Store"] == sel_store)].copy()
     store_row = store_metrics[store_metrics["Store"] == sel_store].iloc[0]
     
-    section_header(f"{sel_store}", f"Branch: {store_row['Branch']}", "🏪")
+    section_header(f"{sel_store}", f"Branch: {store_row['Branch']}")
     
     s1, s2, s3, s4 = st.columns(4)
     s1.metric("Avg Attach%", fmt_pct(store_row["avg"]), help="Average attach rate across all months")
@@ -750,9 +750,9 @@ elif page == "🔍 Store Deep Dive":
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
-    section_header("Store Leaderboard", "Rank stores by different performance metrics", "🏆")
+    section_header("Store Leaderboard", "Rank stores by different performance metrics")
     
-    with st.expander("📊 Ranking Options", expanded=False):
+    with st.expander("Ranking Options", expanded=False):
         col1, col2 = st.columns(2)
         with col1:
             topn = st.slider("Show top/bottom N stores", 5, 30, 12)
@@ -779,7 +779,7 @@ elif page == "🔍 Store Deep Dive":
     styled_dataframe(show[["Branch", "Store", "segment", "Avg Attach%", "Monthly Trend", "Volatility", "Last Month"]].head(topn), height=350)
     st.markdown("</div>", unsafe_allow_html=True)
 
-elif page == "🎯 Store Segments":
+elif page == "Store Segments":
     # Add breadcrumb
     st.markdown(
         """
@@ -787,14 +787,14 @@ elif page == "🎯 Store Segments":
             <span class='small-muted'>Navigation:</span> 
             <a href='#' onclick='window.location.reload()'>Home</a> 
             <span class='small-muted'>→</span> 
-            <strong>🎯 Store Segments</strong>
+            <strong>Store Segments</strong>
         </div>
         """,
         unsafe_allow_html=True
     )
     
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
-    section_header("Store Categorization (Segments)", "Group stores by performance characteristics for targeted actions", "🎯")
+    section_header("Store Categorization (Segments)", "Group stores by performance characteristics for targeted actions")
     st.markdown(
         """
         Stores are grouped using **K-Means clustering** on three explainable features:
@@ -819,22 +819,22 @@ elif page == "🎯 Store Segments":
         )
         st.plotly_chart(fig, use_container_width=True)
     
-    section_header("Segment Distribution", "Number of stores in each segment", "📊")
+    section_header("Segment Distribution", "Number of stores in each segment")
     styled_dataframe(seg_counts, height=150)
 
-    section_header("Segment Playbook (Recommended Actions)", "What to do for each store segment", "📋")
+    section_header("Segment Playbook (Recommended Actions)", "What to do for each store segment")
     st.markdown(
         """
-        - **🟢 Champions (High & improving):** Replicate scripts, incentives, and promoter staff. 
+                - **Champions (High & improving):** Replicate scripts, incentives, and promoter staff. 
           *Best practice sharing opportunities.*
           
-        - **🟡 At-risk (High but falling):** Investigate churn in sales staff, stock-outs, counter practices. 
+                - **At-risk (High but falling):** Investigate churn in sales staff, stock-outs, counter practices. 
           *Refresh pitch and retrain staff.*
           
-        - **🔵 Risers (Low but improving):** Double down on training and nudges. 
+                - **Risers (Low but improving):** Double down on training and nudges. 
           *Best ROI cohort for incremental investment.*
           
-        - **🔴 Long tail (Low & flat):** Consider targeted interventions (bundles), or reduce effort and focus on big wins. 
+                - **Long tail (Low & flat):** Consider targeted interventions (bundles), or reduce effort and focus on big wins. 
           *Evaluate store viability.*
         """
     )
@@ -842,7 +842,7 @@ elif page == "🎯 Store Segments":
     st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
-    section_header("Segment Details", "View all stores with their segment assignments", "📋")
+    section_header("Segment Details", "View all stores with their segment assignments")
     
     seg = segments.copy()
     seg["Avg Attach%"] = seg["avg"].apply(fmt_pct)
@@ -853,7 +853,7 @@ elif page == "🎯 Store Segments":
     styled_dataframe(seg[["Branch","Store","segment","Avg Attach%","Trend","Volatility","Last Month"]], height=400)
     st.markdown("</div>", unsafe_allow_html=True)
 
-elif page == "🔮 Forecast: January":
+elif page == "Forecast: January":
     # Add breadcrumb
     st.markdown(
         """
@@ -861,14 +861,14 @@ elif page == "🔮 Forecast: January":
             <span class='small-muted'>Navigation:</span> 
             <a href='#' onclick='window.location.reload()'>Home</a> 
             <span class='small-muted'>→</span> 
-            <strong>🔮 Forecast: January</strong>
+            <strong>Forecast: January</strong>
         </div>
         """,
         unsafe_allow_html=True
     )
     
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
-    section_header("January Attach% Prediction (Store-level)", "Forecast using trend analysis and branch regularization", "🔮")
+    section_header("January Attach% Prediction (Store-level)", "Forecast using trend analysis and branch regularization")
     st.markdown(
         """
         **Forecast methodology:**
@@ -879,7 +879,7 @@ elif page == "🔮 Forecast: January":
         """
     )
 
-    with st.expander("🔍 Filter & Sort Options", expanded=False):
+    with st.expander("Filter & Sort Options", expanded=False):
         f1, f2, f3 = st.columns([1.1,1.1,1.0])
         branches = sorted(pred["Branch"].unique().tolist())
         sel_br = f1.selectbox("Branch filter", ["All"] + branches, index=0)
@@ -916,7 +916,7 @@ elif page == "🔮 Forecast: January":
     styled_dataframe(view[["Branch","Store","segment","Jan Prediction","Confidence","Last Month","Trend","Volatility"]], height=400)
 
     if px:
-        section_header("Top Predictions Visualization", "Bar chart of top predicted stores", "📊")
+        section_header("Top Predictions Visualization", "Bar chart of top predicted stores")
         topk = st.slider("Number of stores to plot", 10, 50, 20, key="topk_slider")
         plot_df = sub.head(topk).copy()
         plot_df["Jan_Pred_AttachPct_pct"] = plot_df["Jan_Pred_AttachPct"] * 100
@@ -934,7 +934,7 @@ elif page == "🔮 Forecast: January":
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-elif page == "📥 Download Pack":
+elif page == "Download Pack":
     # Add breadcrumb
     st.markdown(
         """
@@ -942,14 +942,14 @@ elif page == "📥 Download Pack":
             <span class='small-muted'>Navigation:</span> 
             <a href='#' onclick='window.location.reload()'>Home</a> 
             <span class='small-muted'>→</span> 
-            <strong>📥 Download Pack</strong>
+            <strong>Download Pack</strong>
         </div>
         """,
         unsafe_allow_html=True
     )
     
     st.markdown("<div class='panel'>", unsafe_allow_html=True)
-    section_header("Data Export", "Download cleaned data, metrics, segments, and forecasts", "📥")
+    section_header("Data Export", "Download cleaned data, metrics, segments, and forecasts")
     st.markdown("<div class='small-muted'>Export the analysis results for reporting or further analysis.</div>", unsafe_allow_html=True)
 
     # Prepare data for export
@@ -963,7 +963,7 @@ elif page == "📥 Download Pack":
         return df.to_csv(index=False).encode("utf-8")
 
     # Individual CSV downloads
-    section_header("Individual CSV Downloads", "Download specific datasets as CSV files", "📄")
+    section_header("Individual CSV Downloads", "Download specific datasets as CSV files")
     
     col1, col2, col3 = st.columns(3)
     
@@ -995,7 +995,7 @@ elif page == "📥 Download Pack":
         )
 
     # Excel workbook export
-    section_header("Complete Excel Workbook", "Single file with all analysis results", "📘")
+    section_header("Complete Excel Workbook", "Single file with all analysis results")
     st.markdown("<div class='small-muted'>Comprehensive Excel file with multiple sheets for easy sharing.</div>", unsafe_allow_html=True)
     
     try:
