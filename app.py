@@ -1,4 +1,5 @@
 import re
+import base64
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -35,9 +36,11 @@ CSS = """
     --text:#1a1a1a;
     --muted:#4a5568;
     --accent:#0056b3;
+    --accent-alt:#204492;
+    --accent-cool:#1db5e9;
     --good:#0f9d58;
     --bad:#d64545;
-    --warn:#d38b0c;
+    --warn:#f26f2c;
     --border:rgba(0,0,0,0.14);
     --shadow: 0 12px 32px rgba(0,0,0,0.12);
   --radius:18px;
@@ -49,7 +52,8 @@ h1, h2, h3, h4, h5, h6, p, span, div {color: var(--text) !important;}
 .small-muted{color: var(--muted) !important; font-size: 0.9rem;}
 .badge{
     display:inline-block; padding: 0.25rem 0.6rem; border-radius: 999px;
-    background: rgba(0,86,179,0.10); border: 1px solid rgba(0,86,179,0.20);
+    background: linear-gradient(120deg, rgba(0,86,179,0.12), rgba(29,181,233,0.12));
+    border: 1px solid rgba(0,86,179,0.20);
     color: var(--text); font-size: 0.85rem; margin-right: 0.35rem;
 }
 .kpi{
@@ -79,6 +83,15 @@ h1, h2, h3, h4, h5, h6, p, span, div {color: var(--text) !important;}
 }
 .stButton > button:hover{border-color: rgba(0,86,179,0.65); background: rgba(0,86,179,0.18);}
 a{color: var(--accent) !important;}
+
+.brand-row{
+    display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;
+    padding:0.4rem 0.75rem; border:1px solid var(--border); border-radius:14px;
+    background: linear-gradient(120deg, rgba(0,86,179,0.08), rgba(29,181,233,0.08));
+}
+.brand-row img{height:42px;}
+.brand-name{font-weight:700; color: var(--accent-alt); font-size:1.05rem;}
+.brand-tag{color: var(--muted); font-size:0.95rem;}
 
 /* Enhanced styles for better readability */
 .stDataFrame {
@@ -136,6 +149,10 @@ a{color: var(--accent) !important;}
 </style>
 """
 st.markdown(CSS, unsafe_allow_html=True)
+
+# Logo
+LOGO_PATH = Path(__file__).parent / "data" / "zopper_logo.svg"
+LOGO_B64 = base64.b64encode(LOGO_PATH.read_bytes()).decode() if LOGO_PATH.exists() else None
 
 
 # =========================
@@ -344,6 +361,10 @@ def styled_dataframe(df, height=300):
 # =========================
 # Sidebar
 # =========================
+if LOGO_B64:
+    st.sidebar.image(f"data:image/svg+xml;base64,{LOGO_B64}", use_container_width=True)
+    st.sidebar.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+
 st.sidebar.markdown("## 📌 Controls")
 st.sidebar.markdown("<div class='small-muted'>Upload the given sheet or use the bundled sample (converted from .xls).</div>", unsafe_allow_html=True)
 
@@ -436,6 +457,20 @@ with st.status("📥 Processing data...", expanded=False) as status:
 # =========================
 # Header
 # =========================
+if LOGO_B64:
+    st.markdown(
+        f"""
+        <div class='brand-row'>
+            <img src="data:image/svg+xml;base64,{LOGO_B64}" alt="Zopper logo" />
+            <div>
+                <div class='brand-name'>Zopper</div>
+                <div class='brand-tag'>Device Insurance Attach% Insights</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 st.markdown("## 📊 Jumbo & Company — Device Insurance Attach% Analytics")
 st.markdown(
     "<p class='small-muted' style='margin-top: -0.5rem; margin-bottom: 1.5rem;'>Interactive dashboard for store performance analysis, segmentation, and forecasting</p>",
