@@ -45,8 +45,8 @@ CSS = """
     --shadow: 0 12px 32px rgba(0,0,0,0.12);
   --radius:18px;
 }
-.main > div {padding-top: 1.1rem; background: var(--bg);}
-.block-container{max-width: 1350px; padding-top: 1.1rem; background: var(--bg);}
+.main > div {padding-top: 1.6rem; background: var(--bg);}
+.block-container{max-width: 1350px; padding-top: 1.6rem; background: var(--bg);}
 [data-testid="stSidebar"] {background: linear-gradient(180deg, #f8f9fa 0%, #eef1f6 100%); border-right: 1px solid var(--border);} 
 h1, h2, h3, h4, h5, h6, p, span, div {color: var(--text) !important;}
 .small-muted{color: var(--muted) !important; font-size: 0.9rem;}
@@ -85,7 +85,7 @@ h1, h2, h3, h4, h5, h6, p, span, div {color: var(--text) !important;}
 a{color: var(--accent) !important;}
 
 .brand-row{
-    display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;
+    display:flex; align-items:center; gap:0.75rem; margin:0.6rem 0 1rem 0;
     padding:0.4rem 0.75rem; border:1px solid var(--border); border-radius:14px;
     background: linear-gradient(120deg, rgba(0,86,179,0.08), rgba(29,181,233,0.08));
 }
