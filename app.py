@@ -444,14 +444,12 @@ def load_with_progress():
             st.stop()
         return loaded
 
-# Load data with progress indicator
-with st.status("📥 Processing data...", expanded=False) as status:
-    df_wide, month_cols = load_with_progress()
-    long = cached_long(df_wide, month_cols)
-    store_metrics = cached_metrics(long)
-    segments = cached_segments(store_metrics)
-    pred = cached_pred(store_metrics, long).merge(segments[["Branch","Store","segment"]], on=["Branch","Store"], how="left")
-    status.update(label="✅ Data loaded successfully!", state="complete")
+# Load data with progress indicator (non-cutting banner)
+df_wide, month_cols = load_with_progress()
+long = cached_long(df_wide, month_cols)
+store_metrics = cached_metrics(long)
+segments = cached_segments(store_metrics)
+pred = cached_pred(store_metrics, long).merge(segments[["Branch","Store","segment"]], on=["Branch","Store"], how="left")
 
 
 # =========================
