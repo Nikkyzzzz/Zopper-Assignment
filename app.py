@@ -4,6 +4,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import streamlit as st
+import warnings
+
+# Suppress deprecation warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=FutureWarning)
 
 try:
     import plotly.express as px
@@ -11,6 +16,9 @@ try:
 except Exception:
     px = None
     go = None
+
+import os
+os.environ['PYTHONWARNINGS'] = 'ignore'
 
 from sklearn.cluster import KMeans
 from sklearn.linear_model import LinearRegression
@@ -20,10 +28,10 @@ from sklearn.linear_model import LinearRegression
 # Page config + styling
 # =========================
 st.set_page_config(
-    page_title="Jumbo & Company — Device Insurance Attach% Insights",
-    page_icon="📈",
+    page_title="Jumbo & Company — Device Insurance Analytics",
+    page_icon="📊",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 CSS = """
@@ -45,27 +53,27 @@ CSS = """
     --shadow: 0 12px 32px rgba(0,0,0,0.12);
   --radius:18px;
 }
-.main > div {padding-top: 2.1rem; background: var(--bg);} 
-.block-container{max-width: 1350px; padding-top: 2.1rem; background: var(--bg);} 
+.main > div {padding-top: 1.8rem; background: var(--bg);} 
+.block-container{max-width: 1350px; padding-top: 1.8rem; background: var(--bg);} 
 [data-testid="stSidebar"] {background: linear-gradient(180deg, #f8f9fa 0%, #eef1f6 100%); border-right: 1px solid var(--border);} 
 h1, h2, h3, h4, h5, h6, p, span, div {color: var(--text) !important;}
 .small-muted{color: var(--muted) !important; font-size: 0.9rem;}
 .badge{
-    display:inline-block; padding: 0.25rem 0.6rem; border-radius: 999px;
+    display:inline-block; padding: 0.15rem 0.4rem; border-radius: 999px;
     background: linear-gradient(120deg, rgba(0,86,179,0.12), rgba(29,181,233,0.12));
     border: 1px solid rgba(0,86,179,0.20);
-    color: var(--text); font-size: 0.85rem; margin-right: 0.35rem;
+    color: var(--text); font-size: 0.7rem; margin-right: 0.25rem;
 }
 .kpi{
     background: linear-gradient(145deg, rgba(255,255,255,0.85), rgba(240,242,245,0.9));
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 1.05rem 1.05rem;
+    padding: 0.6rem 0.7rem;
     box-shadow: var(--shadow);
 }
-.kpi .label{color: var(--muted) !important; font-size: 0.9rem;}
-.kpi .value{font-size: 1.65rem; font-weight: 700; color: var(--accent) !important;}
-.kpi .delta{margin-top: 0.15rem; font-size: 0.95rem; color: var(--muted) !important;}
+.kpi .label{color: var(--muted) !important; font-size: 0.75rem;}
+.kpi .value{font-size: 1.2rem; font-weight: 700; color: var(--accent) !important;}
+.kpi .delta{margin-top: 0.1rem; font-size: 0.75rem; color: var(--muted) !important;}
 .panel{
     background: linear-gradient(145deg, rgba(248,249,250,0.95), rgba(240,242,245,0.95));
     border: 1px solid var(--border);
@@ -85,13 +93,13 @@ h1, h2, h3, h4, h5, h6, p, span, div {color: var(--text) !important;}
 a{color: var(--accent) !important;}
 
 .brand-row{
-    display:flex; align-items:center; gap:0.75rem; margin:1.0rem 0 1.1rem 0;
-    padding:0.4rem 0.75rem; border:1px solid var(--border); border-radius:14px;
+    display:flex; align-items:center; gap:0.5rem; margin:0.4rem 0 0.6rem 0;
+    padding:0.3rem 0.5rem; border:1px solid var(--border); border-radius:10px;
     background: linear-gradient(120deg, rgba(0,86,179,0.08), rgba(29,181,233,0.08));
 }
-.brand-row img{height:42px;}
-.brand-name{font-weight:700; color: var(--accent-alt); font-size:1.05rem;}
-.brand-tag{color: var(--muted); font-size:0.95rem;}
+.brand-row img{height:28px;}
+.brand-name{font-weight:700; color: var(--accent-alt); font-size:0.9rem;}
+.brand-tag{color: var(--muted); font-size:0.8rem;}
 
 /* Enhanced styles for better readability */
 .stDataFrame {
@@ -145,6 +153,11 @@ a{color: var(--accent) !important;}
 .section-header h3 {
     color: var(--text); 
     margin-bottom: 0.25rem;
+}
+
+/* Hide Streamlit warning messages */
+.stAlert, [data-testid="stNotification"], .element-container:has(.stAlert) {
+    display: none !important;
 }
 </style>
 """
@@ -347,7 +360,7 @@ def tooltip(text, icon="ⓘ"):
 def styled_dataframe(df, height=300):
     return st.dataframe(
         df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         height=height,
         column_config={
@@ -362,7 +375,7 @@ def styled_dataframe(df, height=300):
 # Sidebar
 # =========================
 if LOGO_B64:
-    st.sidebar.image(f"data:image/svg+xml;base64,{LOGO_B64}", use_container_width=True)
+    st.sidebar.image(f"data:image/svg+xml;base64,{LOGO_B64}", width='stretch')
     st.sidebar.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
 st.sidebar.markdown("## Controls")
@@ -376,7 +389,7 @@ uploaded = st.sidebar.file_uploader("Upload Excel (.xlsx)", type=["xlsx"]) if no
 st.sidebar.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 st.sidebar.markdown("### Navigation")
 page = st.sidebar.radio(
-    "",
+    "Page Selection",
     ["Executive Summary", 
      "Branch & Month Insights", 
      "Store Deep Dive", 
@@ -455,29 +468,15 @@ pred = cached_pred(store_metrics, long).merge(segments[["Branch","Store","segmen
 # =========================
 # Header
 # =========================
-if LOGO_B64:
-    st.markdown(
-        f"""
-        <div class='brand-row'>
-            <img src="data:image/svg+xml;base64,{LOGO_B64}" alt="Zopper logo" />
-            <div>
-                <div class='brand-name'>Zopper</div>
-                <div class='brand-tag'>Device Insurance Attach% Insights</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-st.markdown("## 📊 Jumbo & Company — Device Insurance Attach% Analytics")
+st.markdown("### 📊 Jumbo & Company — Device Insurance Attach% Analytics")
 st.markdown(
-    "<p class='small-muted' style='margin-top: -0.5rem; margin-bottom: 1.5rem;'>Interactive dashboard for store performance analysis, segmentation, and forecasting</p>",
+    "<p class='small-muted' style='margin-top: -0.5rem; margin-bottom: 0.8rem; font-size: 0.8rem;'>Interactive dashboard for store performance analysis, segmentation, and forecasting</p>",
     unsafe_allow_html=True
 )
 
 st.markdown(
     """
-    <div style='display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem;'>
+    <div style='display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.8rem;'>
         <span class='badge'>📈 Executive Insights</span>
         <span class='badge'>🏪 Branch & Store Analysis</span>
         <span class='badge'>🎯 Store Segmentation</span>
@@ -517,7 +516,7 @@ with c4:
         f"{best_store['Branch']} • Avg {fmt_pct(best_store['avg'])}",
         "Store with highest average attach rate")
 
-st.markdown("<div class='hr'></div>", unsafe_allow_html=True)
+st.markdown("<div class='hr' style='margin: 0.5rem 0;'></div>", unsafe_allow_html=True)
 
 
 # =========================
@@ -586,7 +585,7 @@ if page == "Executive Summary":
             paper_bgcolor='#ffffff',
             font=dict(color='#1a1a1a')
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     else:
         st.info("Plotly not available in this environment. Install plotly for interactive charts.")
 
@@ -628,13 +627,13 @@ elif page == "Branch & Month Insights":
                 paper_bgcolor='#ffffff',
                 font=dict(color='#1a1a1a')
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         else:
             styled_dataframe(sub.head(30))
     else:
         pivot = sub.pivot_table(index="Branch", columns="Month", values="AttachPct", aggfunc="mean")
         pivot = pivot.reindex(columns=MONTHS_ORDER).round(4)
-        st.dataframe(pivot.style.format("{:.1%}"), use_container_width=True, height=400)
+        st.dataframe(pivot.style.format("{:.1%}"), width='stretch', height=400)
 
     section_header("Branch Health Analysis", "Actionable insights by branch performance", "🏥")
     br = long.groupby("Branch")["AttachPct"].agg(avg="mean", std="std").reset_index()
@@ -697,7 +696,7 @@ elif page == "Store Deep Dive":
                 paper_bgcolor='#ffffff',
                 font=dict(color='#1a1a1a')
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         elif metric_view == "Compare to branch":
             b = store_row["Branch"]
@@ -716,7 +715,7 @@ elif page == "Store Deep Dive":
                 paper_bgcolor='#ffffff',
                 font=dict(color='#1a1a1a')
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         else:
             # volatility view: bar of month-to-month deltas
@@ -731,7 +730,7 @@ elif page == "Store Deep Dive":
                 paper_bgcolor='#ffffff',
                 font=dict(color='#1a1a1a')
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
     else:
         styled_dataframe(sub)
 
@@ -800,7 +799,7 @@ elif page == "Store Segments":
             paper_bgcolor='#ffffff',
             font=dict(color='#1a1a1a')
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     
     section_header("Segment Distribution", "Number of stores in each segment")
     styled_dataframe(seg_counts, height=150)
@@ -908,7 +907,7 @@ elif page == "Forecast: January":
         )
         fig.update_yaxes(title="Jan predicted attach%")
         fig.update_xaxes(tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 elif page == "Download Pack":
     # Add breadcrumb
