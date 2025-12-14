@@ -538,7 +538,6 @@ if page == "Executive Summary":
     left, right = st.columns([1.2, 1.0], gap="large")
 
     with left:
-        st.markdown("<div class='panel'>", unsafe_allow_html=True)
         section_header("What's Happening", "Key insights and branch performance at a glance")
         st.markdown(
             """
@@ -557,10 +556,7 @@ if page == "Executive Summary":
         section_header("Branch Leaderboard", "Top performing branches by average attach rate")
         styled_dataframe(branch_tbl, height=250)
 
-        st.markdown("</div>", unsafe_allow_html=True)
-
     with right:
-        st.markdown("<div class='panel'>", unsafe_allow_html=True)
         section_header("Quick Wins & Watchouts", "Stores showing significant improvement or decline")
         
         # Top risers and fallers by slope
@@ -579,9 +575,6 @@ if page == "Executive Summary":
         section_header("Watchouts (Declining Stores)")
         styled_dataframe(fallers, height=200)
 
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown("<div class='panel'>", unsafe_allow_html=True)
     section_header("Month-over-month Distribution", "Box plot showing attach rate distribution by month")
     if px:
         fig = px.box(long, x="Month", y="AttachPct", points="all")
@@ -596,7 +589,6 @@ if page == "Executive Summary":
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Plotly not available in this environment. Install plotly for interactive charts.")
-    st.markdown("</div>", unsafe_allow_html=True)
 
 elif page == "Branch & Month Insights":
     # Add breadcrumb
@@ -612,7 +604,6 @@ elif page == "Branch & Month Insights":
         unsafe_allow_html=True
     )
     
-    st.markdown("<div class='panel'>", unsafe_allow_html=True)
     section_header("Branch Performance by Month", "Analyze monthly trends and performance across branches")
     
     with st.expander("🔍 Filter Options", expanded=False):
@@ -644,9 +635,7 @@ elif page == "Branch & Month Insights":
         pivot = sub.pivot_table(index="Branch", columns="Month", values="AttachPct", aggfunc="mean")
         pivot = pivot.reindex(columns=MONTHS_ORDER).round(4)
         st.dataframe(pivot.style.format("{:.1%}"), use_container_width=True, height=400)
-    st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='panel'>", unsafe_allow_html=True)
     section_header("Branch Health Analysis", "Actionable insights by branch performance", "🏥")
     br = long.groupby("Branch")["AttachPct"].agg(avg="mean", std="std").reset_index()
     br["std"] = br["std"].fillna(0)
@@ -658,7 +647,6 @@ elif page == "Branch & Month Insights":
     show["Volatility"] = show["std"].apply(lambda x: f"{x*100:.1f} pp")
     show["Health"] = show["Health"]
     styled_dataframe(show[["Branch", "Avg Attach%", "Volatility", "Health"]], height=300)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 elif page == "Store Deep Dive":
     # Add breadcrumb
@@ -674,7 +662,6 @@ elif page == "Store Deep Dive":
         unsafe_allow_html=True
     )
     
-    st.markdown("<div class='panel'>", unsafe_allow_html=True)
     section_header("Store Explorer", "Drill down into individual store performance")
     
     with st.expander("Filter & View Options", expanded=True):
@@ -747,9 +734,7 @@ elif page == "Store Deep Dive":
             st.plotly_chart(fig, use_container_width=True)
     else:
         styled_dataframe(sub)
-    st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='panel'>", unsafe_allow_html=True)
     section_header("Store Leaderboard", "Rank stores by different performance metrics")
     
     with st.expander("Ranking Options", expanded=False):
@@ -777,7 +762,6 @@ elif page == "Store Deep Dive":
     show["Volatility"] = show["volatility"].apply(lambda x: f"{x*100:.1f} pp")
     
     styled_dataframe(show[["Branch", "Store", "segment", "Avg Attach%", "Monthly Trend", "Volatility", "Last Month"]].head(topn), height=350)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 elif page == "Store Segments":
     # Add breadcrumb
@@ -793,7 +777,6 @@ elif page == "Store Segments":
         unsafe_allow_html=True
     )
     
-    st.markdown("<div class='panel'>", unsafe_allow_html=True)
     section_header("Store Categorization (Segments)", "Group stores by performance characteristics for targeted actions")
     st.markdown(
         """
@@ -839,9 +822,6 @@ elif page == "Store Segments":
         """
     )
 
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    st.markdown("<div class='panel'>", unsafe_allow_html=True)
     section_header("Segment Details", "View all stores with their segment assignments")
     
     seg = segments.copy()
@@ -851,7 +831,6 @@ elif page == "Store Segments":
     seg["Last Month"] = seg["last_attach"].apply(fmt_pct)
     
     styled_dataframe(seg[["Branch","Store","segment","Avg Attach%","Trend","Volatility","Last Month"]], height=400)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 elif page == "Forecast: January":
     # Add breadcrumb
@@ -867,7 +846,6 @@ elif page == "Forecast: January":
         unsafe_allow_html=True
     )
     
-    st.markdown("<div class='panel'>", unsafe_allow_html=True)
     section_header("January Attach% Prediction (Store-level)", "Forecast using trend analysis and branch regularization")
     st.markdown(
         """
@@ -932,8 +910,6 @@ elif page == "Forecast: January":
         fig.update_xaxes(tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("</div>", unsafe_allow_html=True)
-
 elif page == "Download Pack":
     # Add breadcrumb
     st.markdown(
@@ -948,7 +924,6 @@ elif page == "Download Pack":
         unsafe_allow_html=True
     )
     
-    st.markdown("<div class='panel'>", unsafe_allow_html=True)
     section_header("Data Export", "Download cleaned data, metrics, segments, and forecasts")
     st.markdown("<div class='small-muted'>Export the analysis results for reporting or further analysis.</div>", unsafe_allow_html=True)
 
@@ -1017,5 +992,3 @@ elif page == "Download Pack":
     except Exception as e:
         st.warning("Excel export requires openpyxl. Install with: `pip install openpyxl`")
         st.info("Using sample data? CSV downloads are still available.")
-
-    st.markdown("</div>", unsafe_allow_html=True)
