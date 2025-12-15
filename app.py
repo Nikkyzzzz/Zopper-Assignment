@@ -1,3 +1,6 @@
+# ======================== IMPORTS & SETUP ========================
+# This section imports all necessary libraries for data processing, visualization, and Streamlit app creation
+
 import re
 import base64
 from pathlib import Path
@@ -6,10 +9,11 @@ import pandas as pd
 import streamlit as st
 import warnings
 
-# Suppress deprecation warnings
+# Suppress deprecation warnings to keep console output clean
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 warnings.filterwarnings('ignore', category=FutureWarning)
 
+# Attempt to import plotly for interactive visualizations; gracefully handle if not installed
 try:
     import plotly.express as px
     import plotly.graph_objects as go
@@ -17,26 +21,29 @@ except Exception:
     px = None
     go = None
 
+# Configure Python environment to suppress warnings
 import os
 os.environ['PYTHONWARNINGS'] = 'ignore'
 
-from sklearn.cluster import KMeans
-from sklearn.linear_model import LinearRegression
+# Import machine learning models for clustering and forecasting
+from sklearn.cluster import KMeans  # Used for store segmentation
+from sklearn.linear_model import LinearRegression  # Used for trend analysis and January forecast
 
 
-# =========================
-# Page config + styling
-# =========================
+# ======================== PAGE CONFIGURATION & STYLING ========================
+# Configure Streamlit page layout, title, and initial appearance
+
 st.set_page_config(
     page_title="Jumbo & Company — Device Insurance Analytics",
     page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="collapsed",
+    layout="wide",  # Use wide layout to maximize screen space
+    initial_sidebar_state="collapsed",  # Start with sidebar hidden
 )
 
 CSS = """
 <style>
-/* --- Modern, clean UI --- */
+/* Custom CSS styling to create a professional, modern UI with consistent colors and layout */
+/* --- Color Variables & Global Styles --- */
 :root{
     --bg:#ffffff;
     --card:#f8f9fa;
@@ -163,174 +170,238 @@ a{color: var(--accent) !important;}
 """
 st.markdown(CSS, unsafe_allow_html=True)
 
-# Logo
+# ======================== LOGO SETUP ========================
+# Load and encode the company logo as base64 for display in the sidebar
+
 LOGO_PATH = Path(__file__).parent / "data" / "zopper_logo.svg"
 LOGO_B64 = base64.b64encode(LOGO_PATH.read_bytes()).decode() if LOGO_PATH.exists() else None
 
 
-# =========================
-# Helpers
-# =========================
-MONTHS_ORDER = ["Aug", "Sep", "Oct", "Nov", "Dec"]  # as per the provided sheet
-MONTH_TO_IDX = {m: i + 1 for i, m in enumerate(MONTHS_ORDER)}  # Aug=1,...Dec=5
-IDX_TO_MONTH = {v: k for k, v in MONTH_TO_IDX.items()}
+# ======================== HELPER CONSTANTS & UTILITIES ========================
+# Define constants for month ordering and mapping for time-series analysis
+
+MONTHS_ORDER = ["Aug", "Sep", "Oct", "Nov", "Dec"]  # Months covered in the dataset
+MONTH_TO_IDX = {m: i + 1 for i, m in enumerate(MONTHS_ORDER)}  # Convert month names to numeric indices (Aug=1, Dec=5)
+IDX_TO_MONTH = {v: k for k, v in MONTH_TO_IDX.items()}  # Reverse mapping for converting indices back to month names
 
 def _coerce_pct(x):
+    """Convert percentage input to decimal format (0.23 instead of 23%)"""
     if pd.isna(x):
         return np.nan
     s = str(x).strip()
-    s = s.replace("%", "")
+    s = s.replace("%", "")  # Remove percent sign if present
     try:
-        v = float(s)
+        v = float(s)  # Convert to float
     except Exception:
-        return np.nan
-    # if someone typed 23 instead of 0.23, normalize
+        return np.nan  # Return NaN if conversion fails
+    # Normalize: if value > 1.5, it's likely in percentage form (23 -> 0.23)
     if v > 1.5:
         v = v / 100.0
     return v
 
 def load_data(file) -> pd.DataFrame:
+    """Load Excel file and validate required columns and data format"""
     df = pd.read_excel(file)
     df = df.copy()
+    # Standardize column names by stripping whitespace
     df.columns = [str(c).strip() for c in df.columns]
-    # Basic expected cols: Branch, Store_Name, Aug..Dec (any subset ok)
+    
+    # Validate required columns
     if "Branch" not in df.columns:
         raise ValueError("Missing column: Branch")
+    
+    # Handle flexible store column naming (Store_Name or Store)
     store_col = "Store_Name" if "Store_Name" in df.columns else ("Store" if "Store" in df.columns else None)
     if store_col is None:
         raise ValueError("Missing store column (Store_Name/Store).")
     df = df.rename(columns={store_col: "Store"})
-    # keep only known months present
+    
+    # Extract only month columns that are present in the dataset
     month_cols = [m for m in MONTHS_ORDER if m in df.columns]
     if not month_cols:
         raise ValueError("No month columns found (Aug..Dec).")
+    
+    # Convert all percentage values to decimal format
     for m in month_cols:
         df[m] = df[m].apply(_coerce_pct)
 
+    # Keep only relevant columns and remove rows with missing Branch or Store
     df = df[["Branch", "Store"] + month_cols].dropna(subset=["Branch", "Store"])
+    # Clean up text fields
     df["Branch"] = df["Branch"].astype(str).str.strip()
     df["Store"] = df["Store"].astype(str).str.strip()
 
     return df, month_cols
 
 def to_long(df_wide: pd.DataFrame, month_cols):
+    """Transform wide data (Branch, Store, Aug, Sep, ...) to long format for analysis"""
+    # Melt converts columns to rows: each month value becomes a separate row
     long = df_wide.melt(id_vars=["Branch", "Store"], value_vars=month_cols,
                         var_name="Month", value_name="AttachPct")
     long["Month"] = long["Month"].astype(str).str.strip()
+    # Add numeric time index for trend analysis (Aug=1, Sep=2, ... Dec=5)
     long["t"] = long["Month"].map(MONTH_TO_IDX)
+    # Remove any rows with missing values and sort by branch, store, and time
     long = long.dropna(subset=["AttachPct", "t"]).sort_values(["Branch", "Store", "t"])
     return long
 
 def add_store_metrics(long: pd.DataFrame):
+    """Compute key performance metrics for each store: avg, min, max, trend, volatility"""
     g = long.groupby(["Branch", "Store"])
+    
+    # Calculate basic statistics for each store across all months
     metrics = g["AttachPct"].agg(avg="mean", min="min", max="max", std="std").reset_index()
-    metrics["std"] = metrics["std"].fillna(0)
-    # Trend via slope of linear regression per store (AttachPct ~ t)
+    metrics["std"] = metrics["std"].fillna(0)  # Handle NaN for stores with single data point
+    
+    # Calculate trend (slope) using linear regression: AttachPct ~ time (t)
     slopes = []
-    last_vals = []
+    last_vals = []  # Track the most recent attach% value
     for (b, s), d in g:
-        X = d[["t"]].values
-        y = d["AttachPct"].values
+        X = d[["t"]].values  # Time indices: Aug=1, Dec=5
+        y = d["AttachPct"].values  # Attach % values
         if len(d) >= 2:
+            # Fit linear regression to calculate trend slope
             lr = LinearRegression().fit(X, y)
-            slope = float(lr.coef_[0])
+            slope = float(lr.coef_[0])  # Positive slope = improving, negative = declining
         else:
-            slope = 0.0
+            slope = 0.0  # No trend if only 1 data point
         slopes.append(((b, s), slope))
+        # Get the most recent (last) attach% value for this store
         last_vals.append(((b, s), float(d.sort_values("t")["AttachPct"].iloc[-1])))
+    
+    # Combine all metrics into single dataframe
     slope_df = pd.DataFrame([{"Branch": k[0], "Store": k[1], "slope": v} for k, v in slopes])
     last_df  = pd.DataFrame([{"Branch": k[0], "Store": k[1], "last_attach": v} for k, v in last_vals])
     out = metrics.merge(slope_df, on=["Branch","Store"], how="left").merge(last_df, on=["Branch","Store"], how="left")
-    out["volatility"] = out["std"]
+    out["volatility"] = out["std"]  # Volatility = standard deviation of attach %
     return out
 
 def store_segmentation(store_metrics: pd.DataFrame, n_clusters=4):
+    """Group stores into segments based on average performance, volatility, and trend"""
+    # Select the 3 features for clustering
     X = store_metrics[["avg", "volatility", "slope"]].copy()
-    # scale with robust-ish normalization
+    
+    # Normalize features using robust scaling (resistant to outliers)
+    # This ensures each feature contributes equally to clustering
     X = (X - X.median()) / (X.quantile(0.75) - X.quantile(0.25) + 1e-9)
+    
+    # Apply K-Means clustering to group stores
     km = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
     labels = km.fit_predict(X.values)
+    
     seg = store_metrics.copy()
-    seg["segment_id"] = labels
+    seg["segment_id"] = labels  # Numeric cluster assignment (0-3)
 
-    # segment naming based on centroid profile in original space
+    # Assign meaningful names based on cluster centroids in original space
     cent = seg.groupby("segment_id")[["avg","volatility","slope"]].mean()
     names = {}
     for sid, row in cent.iterrows():
+        # Champions: High performance AND improving trend
         if row["avg"] >= cent["avg"].quantile(0.75) and row["slope"] >= 0:
             names[sid] = "Champions (High & improving)"
+        # At-risk: High performance BUT declining trend
         elif row["avg"] >= cent["avg"].median() and row["slope"] < 0:
             names[sid] = "At-risk (High but falling)"
+        # Risers: Low performance BUT improving trend
         elif row["avg"] < cent["avg"].median() and row["slope"] > 0:
             names[sid] = "Risers (Low but improving)"
+        # Long tail: Low performance AND flat/declining trend
         else:
             names[sid] = "Long tail (Low & flat)"
+    
     seg["segment"] = seg["segment_id"].map(names).fillna("Segment")
     return seg
 
 def predict_jan(store_metrics: pd.DataFrame, long: pd.DataFrame):
     """
-    Forecast Jan (t=6) per store using a simple, explainable ensemble:
-      - per-store linear trend extrapolation (Aug..Dec => t=1..5, predict t=6)
-      - branch-level trend as fallback / regularization
+    Forecast January attach% (t=6) per store using ensemble approach:
+    1. Store-level linear trend extrapolation (Aug-Dec data, predict t=6)
+    2. Branch-level trend as regularization for stores with high volatility
+    3. Confidence score based on data stability and volume
     """
     g_store = long.groupby(["Branch", "Store"])
     g_branch = long.groupby(["Branch"])
 
-    # branch model: AttachPct ~ t
+    # Step 1: Fit branch-level linear trend model (AttachPct ~ time)
+    # This serves as a fallback/regularization for individual stores
     branch_pred = {}
     for b, d in g_branch:
-        X = d[["t"]].values
-        y = d["AttachPct"].values
+        X = d[["t"]].values  # Time indices
+        y = d["AttachPct"].values  # Attach % values for entire branch
         if len(d) >= 2:
+            # Fit linear regression at branch level
             lr = LinearRegression().fit(X, y)
+            # Predict January (t=6)
             pred = float(lr.predict(np.array([[6]]) )[0])
         else:
+            # Fallback: use average if insufficient data
             pred = float(np.nanmean(y)) if len(d) else 0.0
         branch_pred[b] = pred
 
+    # Step 2: Fit store-level predictions and combine with branch predictions
     rows = []
     for (b, s), d in g_store:
-        X = d[["t"]].values
-        y = d["AttachPct"].values
+        X = d[["t"]].values  # Time indices for this store
+        y = d["AttachPct"].values  # Attach % values for this store
         if len(d) >= 2:
+            # Fit linear regression at store level
             lr = LinearRegression().fit(X, y)
+            # Predict January (t=6)
             store_jan = float(lr.predict(np.array([[6]]) )[0])
         else:
-            store_jan = float(y[-1]) if len(d) else np.nan
+            # Fallback: use last available value if insufficient data
+            store_jan = float(y[-1]) if len(d) else 0.0
 
-        br_jan = float(branch_pred.get(b, np.nan))
-        # regularize: more volatility => more weight on branch
+        # Get branch-level prediction for this store
+        br_jan = float(branch_pred.get(b, 0.0))
+        
+        # Regularization: Weight branch prediction more heavily for volatile stores
+        # High volatility stores get pulled toward branch average for stability
         vol = float(store_metrics.loc[(store_metrics.Branch==b)&(store_metrics.Store==s), "volatility"].iloc[0])
-        w_branch = np.clip(vol / 0.12, 0.15, 0.65)  # tuned to typical attach% scale
-        w_store = 1.0 - w_branch
+        w_branch = np.clip(vol / 0.12, 0.15, 0.65)  # Branch weight: 15-65% based on volatility
+        w_store = 1.0 - w_branch  # Store weight: 35-85%
+        
+        # Handle edge cases with NaN values
+        if np.isnan(store_jan):
+            store_jan = br_jan if not np.isnan(br_jan) else 0.0
+        if np.isnan(br_jan):
+            br_jan = store_jan
+            
+        # Blend store and branch predictions based on regularization weights
         pred = w_store * store_jan + w_branch * br_jan
 
-        # soft clipping to plausible bounds
+        # Ensure prediction is within plausible bounds (0% to 100%)
         pred = float(np.clip(pred, 0.0, 1.0))
 
-        # confidence heuristic: lower volatility + more points = higher confidence
-        n = len(d)
+        # Calculate confidence score: combination of stability and data volume
+        # Lower volatility = higher confidence; more data points = higher confidence
+        n = len(d)  # Number of data points for this store
         conf = float(np.clip(1.0 - (vol / 0.18), 0.0, 1.0)) * (0.7 + 0.3 * min(1.0, n/5))
+        
+        # Store the forecast results with supporting metrics
         rows.append({
             "Branch": b,
             "Store": s,
-            "Jan_Pred_AttachPct": pred,
-            "Model_Confidence": conf,
-            "Store_Trend_Slope": float(store_metrics.loc[(store_metrics.Branch==b)&(store_metrics.Store==s), "slope"].iloc[0]),
-            "Volatility": vol,
-            "Last_Month_AttachPct": float(d.sort_values("t")["AttachPct"].iloc[-1]),
+            "Jan_Pred_AttachPct": pred,  # Predicted January attach %
+            "Model_Confidence": conf,  # Confidence score (0-1)
+            "Store_Trend_Slope": float(store_metrics.loc[(store_metrics.Branch==b)&(store_metrics.Store==s), "slope"].iloc[0]),  # Monthly trend
+            "Volatility": vol,  # Historical volatility
+            "Last_Month_AttachPct": float(d.sort_values("t")["AttachPct"].iloc[-1]),  # December attach %
         })
     pred_df = pd.DataFrame(rows)
     return pred_df
 
 def fmt_pct(x):
+    """Convert decimal number (0.23) to percentage string (23.0%)"""
     if pd.isna(x):
-        return "—"
-    return f"{x*100:.1f}%"
+        return "—"  # Display dash for missing values
+    return f"{x*100:.1f}%"  # Format to 1 decimal place
 
 def kpi(label, value, delta=None, help_text=None):
+    """Display a styled KPI card with metric name, value, and optional change indicator"""
+    # Add help icon with tooltip if help text provided
     help_icon = f"<span title='{help_text}' style='margin-left: 0.3rem; color: var(--muted); cursor: help;'>ⓘ</span>" if help_text else ""
+    # Add delta (change) row if provided
     d_html = f"<div class='delta'>{delta}</div>" if delta is not None else ""
     st.markdown(
         f"""
@@ -344,6 +415,7 @@ def kpi(label, value, delta=None, help_text=None):
     )
 
 def section_header(title, description=None, icon=""):
+    """Create a formatted section heading for better visual hierarchy"""
     html = f"""
     <div class='section-header'>
         <h3 style='color: var(--text); margin-bottom: 0.25rem;'>
@@ -355,39 +427,46 @@ def section_header(title, description=None, icon=""):
     st.markdown(html, unsafe_allow_html=True)
 
 def tooltip(text, icon="ⓘ"):
+    """Generate an HTML tooltip icon with help text on hover"""
     return f'<span title="{text}" style="color: var(--muted); cursor: help; margin-left: 0.3rem;">{icon}</span>'
 
 def styled_dataframe(df, height=300):
+    """Render dataframe with custom styling, tooltips, and consistent formatting"""
     return st.dataframe(
         df,
-        width='stretch',
-        hide_index=True,
-        height=height,
+        width='stretch',  # Use full available width
+        hide_index=True,  # Don't show row numbers
+        height=height,  # Set display height
         column_config={
             col: st.column_config.Column(
-                help=f"Column: {col}"
+                help=f"Column: {col}"  # Add column name as tooltip
             ) for col in df.columns
         }
     )
 
 
-# =========================
-# Sidebar
-# =========================
+# ======================== SIDEBAR CONFIGURATION ========================
+# Set up navigation controls and data upload options in the sidebar
+
 if LOGO_B64:
+    # Display company logo at top of sidebar
     st.sidebar.image(f"data:image/svg+xml;base64,{LOGO_B64}", width='stretch')
     st.sidebar.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 
 st.sidebar.markdown("## Controls")
 st.sidebar.markdown("<div class='small-muted'>Upload the given sheet or use the bundled sample (converted from .xls).</div>", unsafe_allow_html=True)
 
+# Set default path for sample data file
 default_path = Path(__file__).parent / "data" / "Jumbo_Attach_Sample.xlsx"
+# Toggle to use sample data or upload custom file
 use_sample = st.sidebar.toggle("Use sample file", value=True)
 
+# File uploader widget (only shown if not using sample)
 uploaded = st.sidebar.file_uploader("Upload Excel (.xlsx)", type=["xlsx"]) if not use_sample else None
 
 st.sidebar.markdown("<div class='hr'></div>", unsafe_allow_html=True)
 st.sidebar.markdown("### Navigation")
+# Radio button for page selection - controls which dashboard page to display
 page = st.sidebar.radio(
     "Page Selection",
     ["Executive Summary", 
@@ -396,7 +475,7 @@ page = st.sidebar.radio(
      "Store Segments", 
      "Forecast: January", 
      "Download Pack"],
-    index=0,
+    index=0,  # Default to Executive Summary
     label_visibility="collapsed"
 )
 
@@ -417,9 +496,10 @@ st.sidebar.markdown(
 )
 
 
-# =========================
-# Load
-# =========================
+# ======================== DATA LOADING & CACHING ========================
+# Streamlit caching layer - avoids reprocessing data when user interacts with widgets
+# This makes the app responsive and efficient
+
 @st.cache_data(show_spinner=False)
 def cached_load(file_path_or_bytes):
     return load_data(file_path_or_bytes)
@@ -440,34 +520,44 @@ def cached_segments(metrics):
 def cached_pred(metrics, long):
     return predict_jan(metrics, long)
 
+# Helper function to load data from either sample file or user upload
 def get_df():
+    """Load data from sample file or user-uploaded file"""
     if use_sample:
+        # Load sample data if using default
         if not default_path.exists():
             raise FileNotFoundError("Sample file missing: app/data/Jumbo_Attach_Sample.xlsx")
         return cached_load(default_path)
     if uploaded is None:
+        # No file selected and not using sample
         return None
     return cached_load(uploaded)
 
 def load_with_progress():
+    """Load data with user-friendly progress feedback"""
     with st.spinner("Loading and processing data..."):
         loaded = get_df()
         if loaded is None:
+            # Prompt user to upload or enable sample
             st.info("Upload an .xlsx file to begin, or toggle **Use sample file**.")
-            st.stop()
+            st.stop()  # Stop execution until data is provided
         return loaded
 
-# Load data with progress indicator (non-cutting banner)
-df_wide, month_cols = load_with_progress()
-long = cached_long(df_wide, month_cols)
-store_metrics = cached_metrics(long)
-segments = cached_segments(store_metrics)
+# ======================== DATA PROCESSING PIPELINE ========================
+# Execute the complete data transformation pipeline with caching at each step
+# This creates a dependency chain: load → long format → metrics → segments → forecast
+
+df_wide, month_cols = load_with_progress()  # Load and validate raw data
+long = cached_long(df_wide, month_cols)  # Transform to time-series format
+store_metrics = cached_metrics(long)  # Calculate performance metrics
+segments = cached_segments(store_metrics)  # Group stores into segments
+# Generate forecasts and merge with segment assignments
 pred = cached_pred(store_metrics, long).merge(segments[["Branch","Store","segment"]], on=["Branch","Store"], how="left")
 
 
-# =========================
-# Header
-# =========================
+# ======================== PAGE HEADER ========================
+# Display main title and subtitle
+
 st.markdown("### 📊 Jumbo & Company — Device Insurance Attach% Analytics")
 st.markdown(
     "<p class='small-muted' style='margin-top: -0.5rem; margin-bottom: 0.8rem; font-size: 0.8rem;'>Interactive dashboard for store performance analysis, segmentation, and forecasting</p>",
@@ -487,14 +577,17 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# =========================
-# Global KPIs
-# =========================
+# ======================== GLOBAL KEY PERFORMANCE INDICATORS ========================
+# Display top-level metrics that summarize the entire dataset
+# These KPIs appear on every page for quick overview
+
 c1, c2, c3, c4 = st.columns(4)
-overall_avg = float(long["AttachPct"].mean())
-mo_last = long[long["Month"] == month_cols[-1]]["AttachPct"].mean()
-mo_first = long[long["Month"] == month_cols[0]]["AttachPct"].mean()
-delta = mo_last - mo_first
+
+# Calculate key metrics
+overall_avg = float(long["AttachPct"].mean())  # Average attach % across all data
+mo_last = long[long["Month"] == month_cols[-1]]["AttachPct"].mean()  # December average
+mo_first = long[long["Month"] == month_cols[0]]["AttachPct"].mean()  # August average
+delta = mo_last - mo_first  # Month-over-month change
 
 with c1:
     kpi("Overall Avg Attach%", 
@@ -519,11 +612,13 @@ with c4:
 st.markdown("<div class='hr' style='margin: 0.5rem 0;'></div>", unsafe_allow_html=True)
 
 
-# =========================
-# Pages
-# =========================
+# ======================== PAGE ROUTING ========================
+# Display different content based on user's page selection
+# Each page section contains specific analysis and visualizations
+
 if page == "Executive Summary":
-    # Add breadcrumb
+    # ======================== EXECUTIVE SUMMARY PAGE ========================
+    # High-level overview page showing key insights and performance rankings
     st.markdown(
         """
         <div class='breadcrumb'>
@@ -590,7 +685,8 @@ if page == "Executive Summary":
         st.info("Plotly not available in this environment. Install plotly for interactive charts.")
 
 elif page == "Branch & Month Insights":
-    # Add breadcrumb
+    # ======================== BRANCH & MONTH INSIGHTS PAGE ========================
+    # Analyze monthly trends and performance patterns across branches
     st.markdown(
         """
         <div class='breadcrumb'>
@@ -648,7 +744,8 @@ elif page == "Branch & Month Insights":
     styled_dataframe(show[["Branch", "Avg Attach%", "Volatility", "Health"]], height=300)
 
 elif page == "Store Deep Dive":
-    # Add breadcrumb
+    # ======================== STORE DEEP DIVE PAGE ========================
+    # Drill down into individual store performance with trend analysis and comparisons
     st.markdown(
         """
         <div class='breadcrumb'>
@@ -763,7 +860,8 @@ elif page == "Store Deep Dive":
     styled_dataframe(show[["Branch", "Store", "segment", "Avg Attach%", "Monthly Trend", "Volatility", "Last Month"]].head(topn), height=350)
 
 elif page == "Store Segments":
-    # Add breadcrumb
+    # ======================== STORE SEGMENTS PAGE ========================
+    # View store categorization based on performance metrics for targeted strategies
     st.markdown(
         """
         <div class='breadcrumb'>
@@ -807,17 +905,13 @@ elif page == "Store Segments":
     section_header("Segment Playbook (Recommended Actions)", "What to do for each store segment")
     st.markdown(
         """
-                - **Champions (High & improving):** Replicate scripts, incentives, and promoter staff. 
-          *Best practice sharing opportunities.*
+- **Champions (High & improving):** Replicate scripts, incentives, and promoter staff. *Best practice sharing opportunities.*
           
-                - **At-risk (High but falling):** Investigate churn in sales staff, stock-outs, counter practices. 
-          *Refresh pitch and retrain staff.*
+- **At-risk (High but falling):** Investigate churn in sales staff, stock-outs, counter practices. *Refresh pitch and retrain staff.*
           
-                - **Risers (Low but improving):** Double down on training and nudges. 
-          *Best ROI cohort for incremental investment.*
+- **Risers (Low but improving):** Double down on training and nudges. *Best ROI cohort for incremental investment.*
           
-                - **Long tail (Low & flat):** Consider targeted interventions (bundles), or reduce effort and focus on big wins. 
-          *Evaluate store viability.*
+- **Long tail (Low & flat):** Consider targeted interventions (bundles), or reduce effort and focus on big wins. *Evaluate store viability.*
         """
     )
 
@@ -832,7 +926,8 @@ elif page == "Store Segments":
     styled_dataframe(seg[["Branch","Store","segment","Avg Attach%","Trend","Volatility","Last Month"]], height=400)
 
 elif page == "Forecast: January":
-    # Add breadcrumb
+    # ======================== FORECAST: JANUARY PAGE ========================
+    # Predict store-level attach% for January with confidence scoring
     st.markdown(
         """
         <div class='breadcrumb'>
@@ -910,7 +1005,10 @@ elif page == "Forecast: January":
         st.plotly_chart(fig, width='stretch')
 
 elif page == "Download Pack":
-    # Add breadcrumb
+    # ======================== DOWNLOAD PACK PAGE ========================
+    # Allow users to export processed data in various formats
+    
+    # Add breadcrumb navigation
     st.markdown(
         """
         <div class='breadcrumb'>
@@ -926,17 +1024,21 @@ elif page == "Download Pack":
     section_header("Data Export", "Download cleaned data, metrics, segments, and forecasts")
     st.markdown("<div class='small-muted'>Export the analysis results for reporting or further analysis.</div>", unsafe_allow_html=True)
 
-    # Prepare data for export
+    # Prepare data for export - clean and format datasets
     long_export = long.copy()
-    long_export["AttachPct"] = long_export["AttachPct"].round(6)
+    long_export["AttachPct"] = long_export["AttachPct"].round(6)  # Round to 6 decimals for export
 
+    # Merge segments with forecast predictions for comprehensive export
     metrics_export = segments.merge(pred[["Branch","Store","Jan_Pred_AttachPct","Model_Confidence"]], on=["Branch","Store"], how="left")
     metrics_export = metrics_export.rename(columns={"Jan_Pred_AttachPct":"Jan_Pred"})
 
+    # Helper function to convert dataframe to CSV bytes for download
     def to_bytes(df):
+        """Convert dataframe to CSV format bytes"""
         return df.to_csv(index=False).encode("utf-8")
 
-    # Individual CSV downloads
+    # ======================== INDIVIDUAL FILE DOWNLOADS ========================
+    # Provide option to download individual CSV files
     section_header("Individual CSV Downloads", "Download specific datasets as CSV files")
     
     col1, col2, col3 = st.columns(3)
@@ -968,19 +1070,22 @@ elif page == "Download Pack":
             help="January predictions with confidence scores"
         )
 
-    # Excel workbook export
+    # ======================== EXCEL WORKBOOK EXPORT ========================
+    # Provide comprehensive export with all analysis results in single Excel file
     section_header("Complete Excel Workbook", "Single file with all analysis results")
     st.markdown("<div class='small-muted'>Comprehensive Excel file with multiple sheets for easy sharing.</div>", unsafe_allow_html=True)
     
     try:
         import io
+        # Create Excel workbook in memory
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
-            df_wide.to_excel(writer, index=False, sheet_name="01_Raw_Data")
-            long_export.to_excel(writer, index=False, sheet_name="02_Long_Format")
-            store_metrics.to_excel(writer, index=False, sheet_name="03_Store_Metrics")
-            segments.to_excel(writer, index=False, sheet_name="04_Segments")
-            pred.to_excel(writer, index=False, sheet_name="05_January_Forecast")
+            # Export each dataset to separate sheet with descriptive names
+            df_wide.to_excel(writer, index=False, sheet_name="01_Raw_Data")  # Original data
+            long_export.to_excel(writer, index=False, sheet_name="02_Long_Format")  # Time-series format
+            store_metrics.to_excel(writer, index=False, sheet_name="03_Store_Metrics")  # Calculated metrics
+            segments.to_excel(writer, index=False, sheet_name="04_Segments")  # Segment assignments
+            pred.to_excel(writer, index=False, sheet_name="05_January_Forecast")  # Forecast predictions
         
         st.download_button(
             "⬇️ Download Complete Excel Pack", 
